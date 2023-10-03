@@ -56,11 +56,11 @@ def setup_netem(packet_loss, duplicate, reorder):
     os.system(f"tc qdisc replace dev lo root netem loss {packet_loss * 100}% duplicate {duplicate * 100}% reorder {reorder * 100}% delay {delay}ms")
 
 
-# @pytest.mark.parametrize("iterations", [10, 100, 1000])
-# @pytest.mark.timeout(20)
-# def test_basic(iterations):
-#     setup_netem(packet_loss=0.0, duplicate=0.0, reorder=0.0)
-#     run_echo_test(iterations=iterations, msg_size=11)
+@pytest.mark.parametrize("iterations", [10, 100, 10000])
+@pytest.mark.timeout(20)
+def test_basic(iterations):
+    setup_netem(packet_loss=0.0, duplicate=0.0, reorder=0.0)
+    run_echo_test(iterations=iterations, msg_size=11)
 
 
 @pytest.mark.parametrize("iterations", [10, 100, 1000])
