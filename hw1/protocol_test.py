@@ -78,6 +78,7 @@ def test_small_loss(iterations):
 #
 #
 # @pytest.mark.parametrize("iterations", [10, 100, 1000])
+# @pytest.mark.parametrize("iterations", [10])
 # @pytest.mark.timeout(20)
 # def test_high_loss(iterations):
 #     setup_netem(packet_loss=0.1, duplicate=0.0, reorder=0.0)

@@ -5,7 +5,7 @@ from logging import debug, info
 
 import numpy as np
 
-logging.getLogger().setLevel(level=logging.WARNING)
+logging.getLogger().setLevel(level=logging.ERROR)
 
 
 class UDPBasedProtocol:
@@ -34,10 +34,10 @@ class Flag(Enum):
 
 
 class MyTCPProtocol(UDPBasedProtocol):
-    timeout = 0.1
+    timeout = 0.05
     buffer_size = 1 << 13
     pack_size = 24
-    die_cnt = 5
+    die_cnt = 4
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -91,13 +91,15 @@ class MyTCPProtocol(UDPBasedProtocol):
                 logging.warning("Ending without ack")
                 return len(package)
             if ack == self.seq and Flag.Ack.value & flag != 0:
+                debug(f"{self} success sent")
                 break
             elif Flag.Ack.value & flag == 0:
                 logging.warning(f"Flag mismatched: {flag}")
                 raise ValueError
-            info(f"{self} ack got. End of sending message")
-            if Flag.End.value & flag != 0:
-                self.ending(False)
+            logging.warning(f"{self}: Ack and seq mismatch: {ack} vs {self.seq}")
+            self.receive_index += self.pack_size + int(length)
+            debug("Try again")
+        info(f"{self} ack got. End of sending message")
         return len(package)
 
     def send(self, data: bytes):
@@ -153,6 +155,7 @@ class MyTCPProtocol(UDPBasedProtocol):
                 except TimeoutError:
                     cnt += 1
                     if package is not None:
+                        info(f"{self} sent pack again")
                         self.sendto(package)
                     debug(f"{self} try again to receive")
         # self.ending(True)
@@ -167,7 +170,7 @@ class MyTCPProtocol(UDPBasedProtocol):
             assert self.connected
             info("Connection from server establish")
         answer = self.recv_msg(n + self.pack_size, None)
-        seq, ack, flag, _, data = self.parse_package(answer)
+        seq, ack, flag, length, data = self.parse_package(answer)
         if flag == Flag.End.value:
             assert ack == self.seq
             self.sendto(self.make_package(self.seq, self.ack, Flag.End.value | Flag.Ack.value, b""))
@@ -196,7 +199,3 @@ class MyTCPProtocol(UDPBasedProtocol):
                     self.make_package(self.seq, self.ack, Flag.End.value | Flag.Ack.value, b""))
         self.connected = False
         info(f"{self} end work")
-
-    def __del__(self):
-        info(f"{self} has been deleted")
-        self.ending(True)
