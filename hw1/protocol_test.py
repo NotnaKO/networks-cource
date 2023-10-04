@@ -23,7 +23,6 @@ def run_echo_test(iterations, msg_size):
     a_addr = ('127.0.0.1', generate_port())
     b_addr = ('127.0.0.1', generate_port())
 
-
     a = MyTCPProtocol(local_addr=a_addr, remote_addr=b_addr)
     b = MyTCPProtocol(local_addr=b_addr, remote_addr=a_addr)
 
@@ -44,6 +43,7 @@ def run_echo_test(iterations, msg_size):
 
 current_netem_state = None
 
+
 def setup_netem(packet_loss, duplicate, reorder):
     global current_netem_state
     if current_netem_state == (packet_loss, duplicate, reorder):
@@ -53,7 +53,8 @@ def setup_netem(packet_loss, duplicate, reorder):
     if reorder > 0:
         delay = 10
 
-    os.system(f"tc qdisc replace dev lo root netem loss {packet_loss * 100}% duplicate {duplicate * 100}% reorder {reorder * 100}% delay {delay}ms")
+    os.system(
+        f"tc qdisc replace dev lo root netem loss {packet_loss * 100}% duplicate {duplicate * 100}% reorder {reorder * 100}% delay {delay}ms")
 
 
 @pytest.mark.parametrize("iterations", [10, 100, 10000])
@@ -69,38 +70,39 @@ def test_small_loss(iterations):
     setup_netem(packet_loss=0.02, duplicate=0.0, reorder=0.0)
     run_echo_test(iterations=iterations, msg_size=14)
 
-# @pytest.mark.parametrize("iterations", [10, 100, 1000, 5000])
-# @pytest.mark.timeout(20)
-# def test_small_duplicate(iterations):
-#     setup_netem(packet_loss=0.0, duplicate=0.02, reorder=0.0)
-#     run_echo_test(iterations=iterations, msg_size=14)
-#
-#
-#
-# @pytest.mark.parametrize("iterations", [10, 100, 1000])
-# @pytest.mark.parametrize("iterations", [10])
-# @pytest.mark.timeout(20)
-# def test_high_loss(iterations):
-#     setup_netem(packet_loss=0.1, duplicate=0.0, reorder=0.0)
-#     run_echo_test(iterations=iterations, msg_size=17)
-#
-#
-# @pytest.mark.parametrize("iterations", [10, 100, 1000])
-# @pytest.mark.timeout(20)
-# def test_high_duplicate(iterations):
-#     setup_netem(packet_loss=0.0, duplicate=0.1, reorder=0.0)
-#     run_echo_test(iterations=iterations, msg_size=14)
-#
-#
-# @pytest.mark.parametrize("msg_size", [100, 100_000, 10_000_000])
-# @pytest.mark.timeout(180)
-# def test_large_message(msg_size):
-#     setup_netem(packet_loss=0.02, duplicate=0.02, reorder=0.01)
-#     run_echo_test(iterations=2, msg_size=msg_size)
-#
-#
-# @pytest.mark.parametrize("iterations", [50_000])
-# @pytest.mark.timeout(60)
-# def test_perfomance(iterations):
-#     setup_netem(packet_loss=0.02, duplicate=0.02, reorder=0.01)
-#     run_echo_test(iterations=iterations, msg_size=10)
+
+@pytest.mark.parametrize("iterations", [10, 100, 1000, 5000])
+@pytest.mark.timeout(20)
+def test_small_duplicate(iterations):
+    setup_netem(packet_loss=0.0, duplicate=0.02, reorder=0.0)
+    run_echo_test(iterations=iterations, msg_size=14)
+
+
+@pytest.mark.parametrize("iterations", [10, 100, 1000])
+# @pytest.mark.parametrize("iterations", [100])
+@pytest.mark.timeout(20)
+def test_high_loss(iterations):
+    setup_netem(packet_loss=0.1, duplicate=0.0, reorder=0.0)
+    # setup_netem(packet_loss=0.5, duplicate=0.0, reorder=0.0)
+    run_echo_test(iterations=iterations, msg_size=17)
+
+
+@pytest.mark.parametrize("iterations", [10, 100, 1000])
+@pytest.mark.timeout(20)
+def test_high_duplicate(iterations):
+    setup_netem(packet_loss=0.0, duplicate=0.1, reorder=0.0)
+    run_echo_test(iterations=iterations, msg_size=14)
+
+
+@pytest.mark.parametrize("msg_size", [100, 100_000, 10_000_000])
+@pytest.mark.timeout(180)
+def test_large_message(msg_size):
+    setup_netem(packet_loss=0.02, duplicate=0.02, reorder=0.01)
+    run_echo_test(iterations=2, msg_size=msg_size)
+
+
+@pytest.mark.parametrize("iterations", [50_000])
+@pytest.mark.timeout(60)
+def test_perfomance(iterations):
+    setup_netem(packet_loss=0.02, duplicate=0.02, reorder=0.01)
+    run_echo_test(iterations=iterations, msg_size=10)
