@@ -6,10 +6,10 @@ from logging import debug, info
 
 import numpy as np
 
-# logging.getLogger().setLevel(level=logging.DEBUG)
+logging.getLogger().setLevel(level=logging.DEBUG)
 
 
-logging.getLogger().setLevel(level=logging.ERROR)
+# logging.getLogger().setLevel(level=logging.ERROR)
 
 
 class UDPBasedProtocol:
@@ -44,6 +44,7 @@ class MyTCPProtocolBase(UDPBasedProtocol):
     die_cnt = 6
     dup_cnt = 2
     max_data_size = 1 << 13
+
     # max_data_size = 1 << 8
 
     def __init__(self, *args, **kwargs):
@@ -210,7 +211,6 @@ class MyTCPProtocolBase(UDPBasedProtocol):
                     debug(f"{self} try again to receive")
         return self.make_package(self.seq, self.ack, Flag.End.value, b"")
 
-
     def recv_(self, n: int):
         info(f"{self} start receiving")
         while not self.connected:
@@ -278,13 +278,14 @@ class MyTCPProtocol(MyTCPProtocolBase):
         cnt += le
         resp = self.recv_(le)
         assert resp == p[:le]
-        i = 0
         time.sleep(self.die_cnt * self.timeout)
-        while i < self.die_cnt:
-            i += 1
-            for _ in range(i):
+        while True:
+            try:
                 resp = self.recvfrom(le + self.pack_size)
-                assert self.parse_package(resp)[-1] == p[:le]
+                if self.parse_package(resp)[-1] != p[:le]:
+                    self.receive_index -= len(resp) + self.pack_size
+            except TimeoutError:
+                break
         info(f"{self} end sending of big pack")
         self.end_connection()
         return cnt
