@@ -6,10 +6,10 @@ from logging import debug, info
 
 import numpy as np
 
-logging.getLogger().setLevel(level=logging.DEBUG)
+# logging.getLogger().setLevel(level=logging.DEBUG)
 
 
-# logging.getLogger().setLevel(level=logging.ERROR)
+logging.getLogger().setLevel(level=logging.ERROR)
 
 
 class UDPBasedProtocol:
@@ -38,14 +38,13 @@ class Flag(Enum):
 class MyTCPProtocolBase(UDPBasedProtocol):
     # timeout = 5
     timeout = 0.01
-    buffer_size = 1 << 15
+    buffer_size = 1 << 16
     # buffer_size = 1 << 11
     pack_size = 24
     die_cnt = 6
     dup_cnt = 2
     max_data_size = 1 << 13
-
-    # max_data_size = 1 << 8
+    # max_data_size = 1 << 10
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -55,6 +54,7 @@ class MyTCPProtocolBase(UDPBasedProtocol):
         self.receive_index = 0
         self.connected = False
         self.last_pack_to_send = None
+        self.pack = False
         self.udp_socket.settimeout(self.timeout)
 
     @staticmethod
@@ -65,6 +65,10 @@ class MyTCPProtocolBase(UDPBasedProtocol):
 
     @staticmethod
     def parse_package(package: bytes):
+        if len(package) < 30:
+            debug(f"Get pack: {package}")
+        else:
+            debug(f"Get pack: {package[:30]}...")
         res = np.frombuffer(package, count=2, dtype=np.uint)
         seq = res[0]
         ack = res[1]
@@ -116,7 +120,7 @@ class MyTCPProtocolBase(UDPBasedProtocol):
                 info(f"{self} success sent. Ack got.")
                 return len(package)
             elif Flag.Ack.value & flag == 0:
-                logging.warning(f"Flag mismatched: {flag}")
+                logging.critical(f"Flag mismatched: {flag}")
                 raise ValueError
             logging.warning(
                 f"{self}: Ack and seq mismatch: {ack} vs {self.seq}. " + "Duplicate"
@@ -126,7 +130,11 @@ class MyTCPProtocolBase(UDPBasedProtocol):
                 info("Sending for duplicating prevent")
                 self.smart_sendto(self.last_pack_to_send)
                 cnt = 0
-            self.receive_index += self.pack_size + int(length)
+            if not self.pack:
+                self.receive_index += self.pack_size + int(length)
+            else:
+                self.receive_index += self.pack_size + self.max_data_size
+            debug(f"{self} now index is {self.receive_index}")
 
     def send_(self, data: bytes, adding_flag: np.uint32 = Flag.Empty.value, length=0):
         info("Start sending by {}...".format(self))
@@ -169,7 +177,8 @@ class MyTCPProtocolBase(UDPBasedProtocol):
                         logging.warning(f"{self} get start pack {seq} and {ack}, but wait _ and 1")
                     else:
                         logging.warning(f"{self} flag mismatch on start: {flag}")
-            debug(f"{self} get start pack {seq} and {ack}, but wait 0 and 0")
+            debug(
+                f"{self} get start pack {seq}, {ack} and {flag}, but wait 0 and 0 {Flag.Start.value}")
 
     def get_buffer(self, n: int):
         debug(f"{self} start getting buffer")
@@ -243,11 +252,13 @@ class MyTCPProtocolBase(UDPBasedProtocol):
 
     def end_connection(self):
         info(f"{self} finish connection")
-        self.seq = self.ack = 0
-        self.connected = False
-        self.received_buffer = b''
+        self.seq = np.uint(0)
+        self.ack = np.uint(0)
+        self.received_buffer = b""
         self.receive_index = 0
+        self.connected = False
         self.last_pack_to_send = None
+        self.pack = False
 
 
 class MyTCPProtocol(MyTCPProtocolBase):
@@ -266,6 +277,7 @@ class MyTCPProtocol(MyTCPProtocolBase):
         info(f"{self} starting big pack sending")
         for i in range(self.max_data_size, len(data), self.max_data_size):
             cnt += self.send_(data[i - self.max_data_size: i])
+            self.pack = True  # Now reading only max size packages
             resp = self.recv_(self.max_data_size)
             if resp != data[i - self.max_data_size: i]:
                 logging.error(f"\n{resp}" + '\n' + str(data[i - self.max_data_size: i]))
@@ -278,16 +290,17 @@ class MyTCPProtocol(MyTCPProtocolBase):
         cnt += le
         resp = self.recv_(le)
         assert resp == p[:le]
-        time.sleep(self.die_cnt * self.timeout)
+        info(f"{self} sleep and wait downtime of other({(self.die_cnt + 1) * self.timeout})")
+        time.sleep((self.die_cnt + 1) * self.timeout)
         while True:
             try:
-                resp = self.recvfrom(le + self.pack_size)
-                if self.parse_package(resp)[-1] != p[:le]:
-                    self.receive_index -= len(resp) + self.pack_size
+                self.recvfrom(le + self.pack_size)
+                debug("New mock iteration")
             except TimeoutError:
                 break
         info(f"{self} end sending of big pack")
         self.end_connection()
+        assert not self.pack
         return cnt
 
     def recv(self, n: int):
@@ -297,14 +310,18 @@ class MyTCPProtocol(MyTCPProtocolBase):
         except ValueError:
             self.send_(b'OK')
             assert self.connected
-            info("Starting receiving a package")
+            info("Starting receiving a big package")
+            self.pack = True  # Now reading only a max size packages
             while True:
                 cur = super().recv_(self.max_data_size)
                 msg += cur
                 info(f"Get next pack. Big pack length: {len(msg)}.")
                 self.send_(cur)
                 if len(cur) != self.max_data_size:
+                    info(f"{self} sleep and wait {self.timeout} sec.")
+                    time.sleep(self.timeout)
                     info(f"{self} end of receiving big pack")
                     break
         finally:
+            assert not self.pack
             return msg
