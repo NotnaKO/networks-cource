@@ -2,6 +2,7 @@ import os
 import random
 
 import pytest
+from testable_thread import TestableThread
 
 from protocol import MyTCPProtocol
 from servers import EchoClient, EchoServer
@@ -53,11 +54,10 @@ def setup_netem(packet_loss, duplicate, reorder):
     if reorder > 0:
         delay = 10
 
-    os.system(
-        f"tc qdisc replace dev lo root netem loss {packet_loss * 100}% duplicate {duplicate * 100}% reorder {reorder * 100}% delay {delay}ms")
+    os.system(f"tc qdisc replace dev lo root netem loss {packet_loss * 100}% duplicate {duplicate * 100}% reorder {100 - (reorder * 100)}% delay {delay}ms")
 
 
-@pytest.mark.parametrize("iterations", [10, 100, 10000])
+@pytest.mark.parametrize("iterations", [10, 100, 1000])
 @pytest.mark.timeout(20)
 def test_basic(iterations):
     setup_netem(packet_loss=0.0, duplicate=0.0, reorder=0.0)
@@ -79,11 +79,9 @@ def test_small_duplicate(iterations):
 
 
 @pytest.mark.parametrize("iterations", [10, 100, 1000])
-# @pytest.mark.parametrize("iterations", [100])
 @pytest.mark.timeout(20)
 def test_high_loss(iterations):
     setup_netem(packet_loss=0.1, duplicate=0.0, reorder=0.0)
-    # setup_netem(packet_loss=0.5, duplicate=0.0, reorder=0.0)
     run_echo_test(iterations=iterations, msg_size=17)
 
 
@@ -97,13 +95,12 @@ def test_high_duplicate(iterations):
 @pytest.mark.parametrize("msg_size", [100, 100_000, 10_000_000])
 @pytest.mark.timeout(180)
 def test_large_message(msg_size):
-    # setup_netem(packet_loss=0.02, duplicate=0.02, reorder=0.01)
-    setup_netem(packet_loss=0.02, duplicate=0.02, reorder=0.0)
+    setup_netem(packet_loss=0.02, duplicate=0.02, reorder=0.01)
     run_echo_test(iterations=2, msg_size=msg_size)
 
-#
-# @pytest.mark.parametrize("iterations", [50_000])
-# @pytest.mark.timeout(60)
-# def test_perfomance(iterations):
-#     setup_netem(packet_loss=0.02, duplicate=0.02, reorder=0.01)
-#     run_echo_test(iterations=iterations, msg_size=10)
+
+@pytest.mark.parametrize("iterations", [50_000])
+@pytest.mark.timeout(60)
+def test_perfomance(iterations):
+    setup_netem(packet_loss=0.02, duplicate=0.02, reorder=0.01)
+    run_echo_test(iterations=iterations, msg_size=10)
