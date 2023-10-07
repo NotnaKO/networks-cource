@@ -6,9 +6,6 @@ from logging import debug, info
 
 import numpy as np
 
-# logging.getLogger().setLevel(level=logging.DEBUG)
-
-
 logging.getLogger().setLevel(level=logging.ERROR)
 
 
@@ -27,24 +24,21 @@ class UDPBasedProtocol:
 
 
 class Flag(Enum):
-    Empty = np.uint32(0)
-    Start = np.uint32(1)
-    Ack = np.uint32(2)
-    End = np.uint32(4)
-    PackBegin = np.uint32(8)
-    LastPack = np.uint32(16)
+    Empty = np.uint8(0)
+    Start = np.uint8(1)
+    Ack = np.uint8(2)
+    End = np.uint8(4)
+    PackBegin = np.uint8(8)
+    LastPack = np.uint8(16)
 
 
 class MyTCPProtocolBase(UDPBasedProtocol):
-    # timeout = 5
     timeout = 0.01
     buffer_size = 1 << 16
-    # buffer_size = 1 << 11
-    pack_size = 24
-    die_cnt = 6
-    dup_cnt = 2
+    pack_size = 21
+    die_cnt = 7
+    dup_cnt = 10
     max_data_size = 1 << 13
-    # max_data_size = 1 << 10
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -72,7 +66,8 @@ class MyTCPProtocolBase(UDPBasedProtocol):
         res = np.frombuffer(package, count=2, dtype=np.uint)
         seq = res[0]
         ack = res[1]
-        flag, length = np.frombuffer(package, offset=16, count=2, dtype=np.uint32)[0:]
+        flag = np.frombuffer(package, offset=16, count=1, dtype=np.uint8)[0]
+        length = np.frombuffer(package, offset=17, count=1, dtype=np.uint32)[0]
         data = package[MyTCPProtocol.pack_size:]
         if len(data) < 30:
             debug(f"Get seq={seq}, ack={ack}, flag={flag}, len={length} data={data}")
@@ -98,8 +93,8 @@ class MyTCPProtocolBase(UDPBasedProtocol):
             debug(f"{self} sending {data}")
         else:
             debug(f"{self} sending {data[:30]}...")
-
-        self.sendto(data)
+        for _ in range(3):
+            self.sendto(data)
         self.last_pack_to_send = data
         return len(data)
 
@@ -215,8 +210,7 @@ class MyTCPProtocolBase(UDPBasedProtocol):
                     cnt += 1
                     if self.last_pack_to_send is not None:
                         info(f"{self} sent pack again")
-                        for _ in range(cnt):
-                            self.smart_sendto(self.last_pack_to_send)
+                        self.smart_sendto(self.last_pack_to_send)
                     debug(f"{self} try again to receive")
         return self.make_package(self.seq, self.ack, Flag.End.value, b"")
 

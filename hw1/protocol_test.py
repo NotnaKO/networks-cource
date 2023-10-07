@@ -2,7 +2,6 @@ import os
 import random
 
 import pytest
-from testable_thread import TestableThread
 
 from protocol import MyTCPProtocol
 from servers import EchoClient, EchoServer
@@ -101,6 +100,6 @@ def test_large_message(msg_size):
 
 @pytest.mark.parametrize("iterations", [50_000])
 @pytest.mark.timeout(60)
-def test_perfomance(iterations):
+def test_performance(iterations):
     setup_netem(packet_loss=0.02, duplicate=0.02, reorder=0.01)
     run_echo_test(iterations=iterations, msg_size=10)
